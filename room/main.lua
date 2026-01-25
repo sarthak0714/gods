@@ -4,11 +4,20 @@ local TILE_H = 64
 local ROOM_W = 12
 local ROOM_H = 12
 
-
 local camera = {
     x = 960,
     y = 200,
 }
+
+local victoryFont = love.graphics.newFont(64)
+
+local victoryText = {
+    text = "FOE VANQUISHED",
+    alpha = 0,
+    show = false,
+    fadeSpeed = 1.2 -- seconds to fully appear
+}
+
 
 -- PLAYER
 local player = {
@@ -75,10 +84,16 @@ local roomLocked = true
 
 function updateRoomState()
     roomLocked = enemy.hp > 0
+
+    if not roomLocked and not victoryText.show then
+        victoryText.show = true
+        victoryText.alpha = 0
+        victoryText.yOffset = 20
+    end
 end
 
 function drawRoom()
-    love.graphics.setColor(1, 1, 1, 0.25)
+    love.graphics.setColor(1, 0.82, 0.89, 0.25)
     for y = 0, ROOM_H - 1 do
         for x = 0, ROOM_W - 1 do
             local sx, sy = iso(x, y)
@@ -182,6 +197,11 @@ function love.update(dt)
     -- TILE-BASED BOUNDS (REAL ROOM)
     player.x = math.max(0.2, math.min(ROOM_W - 0.2, player.x))
     player.y = math.max(0.2, math.min(ROOM_H - 0.2, player.y))
+
+    if victoryText.show then
+        victoryText.alpha = math.min(1, victoryText.alpha + dt / victoryText.fadeSpeed)
+        victoryText.yOffset = math.max(0, victoryText.yOffset - 40 * dt)
+    end
 end
 
 function love.draw()
@@ -202,8 +222,27 @@ function love.draw()
     end
 
 
-    love.graphics.print(
-        roomLocked and "ROOM LOCKED" or "ROOM CLEARED",
-        20, 20
-    )
+    if victoryText.show then
+        love.graphics.setFont(victoryFont)
+
+        local screenW = love.graphics.getWidth()
+        local screenH = love.graphics.getHeight()
+
+        local text = victoryText.text
+        local textW = victoryFont:getWidth(text)
+        local textH = victoryFont:getHeight()
+
+        local x = (screenW - textW) / 2
+        local y = (screenH - textH) / 2 - victoryText.yOffset
+
+        -- SHADOW (draw first)
+        love.graphics.setColor(0, 0, 0, victoryText.alpha * 0.6)
+        love.graphics.print(text, x + 4, y + 4)
+
+        -- MAIN TEXT (gold)
+        love.graphics.setColor(1.0, 0.94, 0.07, victoryText.alpha)
+        love.graphics.print(text, x, y)
+
+        love.graphics.setColor(1, 1, 1, 1)
+    end
 end
