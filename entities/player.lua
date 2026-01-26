@@ -1,4 +1,6 @@
 local Mace = require("weapons.mace")
+local Iso = require("core.iso")
+
 
 local Player = {}
 Player.__index = Player
@@ -6,6 +8,8 @@ Player.__index = Player
 
 function Player.new(x, y)
     local self = setmetatable({}, Player)
+
+    self.aim = { x = 1, y = 0 }
 
     self.x = x
     self.y = y
@@ -28,6 +32,26 @@ function Player.new(x, y)
     self.weapon = Mace:new(self)
 
     return self
+end
+
+function Player:updateAim(camera, tileW, tileH)
+    local mx, my = love.mouse.getPosition()
+
+    -- convert mouse screen → camera space
+    local cx = mx - camera.x
+    local cy = my - camera.y
+
+    -- convert camera space → world (iso)
+    local wx, wy = Iso.screenToWorld(cx, cy, tileW, tileH)
+
+    local dx = wx - self.x
+    local dy = wy - self.y
+
+    local len = math.sqrt(dx * dx + dy * dy)
+    if len > 0.0001 then
+        self.aim.x = dx / len
+        self.aim.y = dy / len
+    end
 end
 
 -- INPUT (called from main)
@@ -113,14 +137,17 @@ function Player:drawWeapon(sx, sy)
 
     local t = 1 - (anim.timer / anim.duration)
 
-    local angle = 0
-    local length = 26
+    local aim = self.aim
+    local baseAngle = math.atan2(aim.y, aim.x)
+
+    local angle = baseAngle
+    local length = 100
 
     if anim.type == "sweep" then
-        angle = -math.pi / 2 + t * math.pi
+        local sweepArc = math.pi * 0.8
+        angle = baseAngle - sweepArc / 2 + t * sweepArc
     elseif anim.type == "slam" then
-        angle = math.pi / 2
-        length = 26 + t * 14
+        length = 100 + t * 14
     end
 
     love.graphics.push()
@@ -141,6 +168,20 @@ end
 function Player:draw(iso, camera)
     local sx, sy = iso(self.x, self.y)
     sx, sy = camera.x + sx, camera.y + sy
+
+
+    ---- DEBUG
+    -- DEBUG AIM LINE
+    -- love.graphics.setColor(1, 0, 0)
+    -- love.graphics.line(
+    --     sx,
+    --     sy,
+    --     sx + self.aim.x * 40,
+    --     sy + self.aim.y * 40
+    -- )
+    -- love.graphics.setColor(1, 1, 1)
+
+    --- DEBUG
 
     -- body
     love.graphics.setColor(1, 1, 1, self.invulnerable and 0.5 or 1)

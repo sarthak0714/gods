@@ -90,6 +90,9 @@ function love.update(dt)
         dt
     )
 
+    player:updateAim(camera, TILE_W, TILE_H)
+
+
     Audio.update()
 end
 

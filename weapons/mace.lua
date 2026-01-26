@@ -6,9 +6,9 @@ Mace.__index = Mace
 function Mace:new(owner)
     local w       = Weapon.new(self, owner)
 
-    w.sweepRange  = 1.5
+    w.sweepRange  = 3
     w.sweepDamage = 20
-    w.slamRadius  = 2.5
+    w.slamRadius  = 4
     w.slamDamage  = 40
 
     return w
@@ -23,7 +23,7 @@ function Mace:primary(enemies)
     self.anim.duration = 0.15
 
     local px, py = self.owner.x, self.owner.y
-    local facing = self.owner.facing
+    local aim = self.owner.aim
 
     for _, enemy in ipairs(enemies) do
         if enemy.dead then goto continue end
@@ -33,7 +33,7 @@ function Mace:primary(enemies)
         local dist = math.sqrt(dx * dx + dy * dy)
 
         if dist <= self.sweepRange then
-            local dot = dx * facing.x + dy * facing.y
+            local dot = dx * aim.x + dy * aim.y
             if dot > 0.4 then
                 enemy:takeDamage(self.sweepDamage)
             end
