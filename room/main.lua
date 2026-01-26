@@ -5,6 +5,7 @@ local ROOM_W    = 25
 local ROOM_H    = 25
 
 local roomMap   = {}
+local sounds    = {}
 
 local GRID_FILL = { 84 / 255, 225 / 255, 227 / 255, 0.12 } -- light, subtle
 local GRID_LINE = { 84 / 255, 225 / 255, 227 / 255, 0.35 } -- darker border
@@ -139,6 +140,8 @@ function updateRoomState()
         victoryText.show = true
         victoryText.alpha = 0
         victoryText.yOffset = 20
+
+        playSound(sounds.victory)
     end
 end
 
@@ -203,6 +206,7 @@ function love.mousepressed(x, y, button)
             enemy.hp = enemy.hp - 1
             enemy.isHit = true
             enemy.hitFlashTime = 0.08
+            playSound(sounds.hit)
             updateRoomState()
         end
     end
@@ -228,11 +232,20 @@ function love.keypressed(key)
         player.dashTime = player.dashDuration
         player.dashDX = dx
         player.dashDY = dy
+        playSound(sounds.dash)
     end
 end
 
 function love.update(dt)
     local dx, dy = 0, 0
+
+    if victoryText.show and victoryText.timer then
+        victoryText.timer = victoryText.timer - dt
+        if victoryText.timer <= 0 then
+            playSound(sounds.victory)
+            victoryText.timer = nil
+        end
+    end
 
 
     if enemy.isHit then
@@ -324,8 +337,23 @@ end
 function love.load()
     generateRoom()
 
+    sounds.dash      = love.audio.newSource("sounds/dash.wav", "static")
+    sounds.hit       = love.audio.newSource("sounds/attack.wav", "static")
+    sounds.enemy_die = love.audio.newSource("sounds/death.wav", "static")
+    sounds.victory   = love.audio.newSource("sounds/win.wav", "static")
+
+    sounds.dash:setVolume(0.6)
+    sounds.hit:setVolume(0.7)
+    sounds.enemy_die:setVolume(0.8)
+    sounds.victory:setVolume(1.0)
+
     player.x, player.y = getRandomWalkableTile()
     enemy.x, enemy.y   = getRandomWalkableTile()
+end
+
+function playSound(src)
+    local s = src:clone()
+    s:play()
 end
 
 function love.draw()
