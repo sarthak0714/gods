@@ -1,5 +1,8 @@
+local Mace = require("weapons.mace")
+
 local Player = {}
 Player.__index = Player
+
 
 function Player.new(x, y)
     local self = setmetatable({}, Player)
@@ -9,6 +12,9 @@ function Player.new(x, y)
     self.speed = 3
     self.size = 15
 
+    -- direction
+    self.facing = { x = 1, y = 0 }
+
     -- dash
     self.isDashing = false
     self.dashTime = 0
@@ -17,6 +23,9 @@ function Player.new(x, y)
     self.dashDX = 0
     self.dashDY = 0
     self.invulnerable = false
+
+    -- weapon
+    self.weapon = Mace:new(self)
 
     return self
 end
@@ -32,6 +41,8 @@ end
 
 function Player:update(dt, room)
     -- DASH LOGIC
+    self.weapon:update(dt)
+
     if self.isDashing then
         local step = 0.05
         local remaining = self.dashSpeed * dt
@@ -78,6 +89,12 @@ function Player:update(dt, room)
         dx, dy = dx / len, dy / len
     end
 
+    if len > 0 then
+        dx, dy = dx / len, dy / len
+        self.facing.x = dx
+        self.facing.y = dy
+    end
+
     local speed = self.speed * dt
     local tryX = self.x + dx * speed
     local tryY = self.y + dy * speed
@@ -90,26 +107,57 @@ function Player:update(dt, room)
     end
 end
 
+function Player:drawWeapon(sx, sy)
+    local anim = self.weapon.anim
+    if not anim or not anim.type then return end
+
+    local t = 1 - (anim.timer / anim.duration)
+
+    local angle = 0
+    local length = 26
+
+    if anim.type == "sweep" then
+        angle = -math.pi / 2 + t * math.pi
+    elseif anim.type == "slam" then
+        angle = math.pi / 2
+        length = 26 + t * 14
+    end
+
+    love.graphics.push()
+    love.graphics.translate(sx, sy)
+    love.graphics.rotate(angle)
+
+    -- handle
+    love.graphics.setColor(0.45, 0.3, 0.2)
+    love.graphics.rectangle("fill", 0, -2, length, 4)
+
+    -- head
+    love.graphics.setColor(0.7, 0.7, 0.7)
+    love.graphics.rectangle("fill", length - 4, -6, 8, 12)
+
+    love.graphics.pop()
+end
+
 function Player:draw(iso, camera)
     local sx, sy = iso(self.x, self.y)
+    sx, sy = camera.x + sx, camera.y + sy
+
+    -- body
     love.graphics.setColor(1, 1, 1, self.invulnerable and 0.5 or 1)
-    love.graphics.circle("fill", camera.x + sx, camera.y + sy, self.size)
+    love.graphics.circle("fill", sx, sy, self.size)
+
+    -- weapon
+    self:drawWeapon(sx, sy)
+
     love.graphics.setColor(1, 1, 1, 1)
 end
 
-function Player:attack(enemy)
-    if enemy.dead then return false end
+function Player:usePrimary(enemies)
+    self.weapon:primary(enemies)
+end
 
-    local dx = enemy.x - self.x
-    local dy = enemy.y - self.y
-    local dist = math.sqrt(dx * dx + dy * dy)
-
-    if dist < 1.2 then
-        enemy:takeDamage(1)
-        return true
-    end
-
-    return false
+function Player:useSecondary(enemies)
+    self.weapon:secondary(enemies)
 end
 
 return Player

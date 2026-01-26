@@ -6,14 +6,16 @@ local Player           = require("entities.player")
 local Enemy            = require("entities.enemy")
 local VictoryText      = require("ui.victory_text")
 
+local TILE_W, TILE_H   = 150, 96
+
+local GRID_FILL        = { 84 / 255, 225 / 255, 227 / 255 }
+local GRID_LINE        = { 84 / 255, 225 / 255, 227 / 255 }
+
 local victoryTriggered = false
 
-
-local TILE_W, TILE_H = 150, 96
-
-local GRID_FILL      = { 84 / 255, 225 / 255, 227 / 255 }
-local GRID_LINE      = { 84 / 255, 225 / 255, 227 / 255 }
-
+-- =========================
+-- ROOM DRAW
+-- =========================
 local function drawRoom()
     for y = 1, room.h do
         for x = 1, room.w do
@@ -27,7 +29,6 @@ local function drawRoom()
 
                 local depth = y / room.h
 
-                -- fill
                 love.graphics.setColor(
                     GRID_FILL[1],
                     GRID_FILL[2],
@@ -36,7 +37,6 @@ local function drawRoom()
                 )
                 love.graphics.polygon("fill", p1x, p1y, p2x, p2y, p3x, p3y, p4x, p4y)
 
-                -- border
                 love.graphics.setColor(GRID_LINE[1], GRID_LINE[2], GRID_LINE[3], 0.35)
                 love.graphics.polygon("line", p1x, p1y, p2x, p2y, p3x, p3y, p4x, p4y)
             end
@@ -46,7 +46,9 @@ local function drawRoom()
     love.graphics.setColor(1, 1, 1, 1)
 end
 
-
+-- =========================
+-- LOAD
+-- =========================
 function love.load()
     sounds = Audio.load()
 
@@ -60,31 +62,23 @@ function love.load()
     victory = VictoryText.new()
 end
 
+-- =========================
+-- UPDATE
+-- =========================
 function love.update(dt)
     enemy:update(dt)
     victory:update(dt)
 
-    -- PLAYER MOVEMENT
-    local dx, dy = 0, 0
-    if love.keyboard.isDown("w") then dy = dy - 1 end
-    if love.keyboard.isDown("s") then dy = dy + 1 end
-    if love.keyboard.isDown("a") then dx = dx - 1 end
-    if love.keyboard.isDown("d") then dx = dx + 1 end
+    -- PLAYER (movement + dash + weapon update)
+    player:update(dt, room)
 
-    local len = math.sqrt(dx * dx + dy * dy)
-    if len > 0 then
-        dx, dy = dx / len, dy / len
+    -- WEAPON INPUT
+    if love.mouse.isDown(1) then
+        player:usePrimary({ enemy })
     end
 
-    local speed = player.speed * dt
-    local tryX = player.x + dx * speed
-    local tryY = player.y + dy * speed
-
-    if room:isWalkable(tryX, player.y) then
-        player.x = tryX
-    end
-    if room:isWalkable(player.x, tryY) then
-        player.y = tryY
+    if love.mouse.isDown(2) then
+        player:useSecondary({ enemy })
     end
 
     -- CAMERA FOLLOW
@@ -95,8 +89,13 @@ function love.update(dt)
         TILE_H,
         dt
     )
+
+    Audio.update()
 end
 
+-- =========================
+-- DASH INPUT
+-- =========================
 function love.keypressed(key)
     if key == "space" and not player.isDashing then
         local dx, dy = 0, 0
@@ -115,46 +114,12 @@ function love.keypressed(key)
     end
 end
 
-function love.mousepressed(x, y, button)
-    if button ~= 1 then return end
-    if enemy.dead then return end
-
-    local hit = player:attack(enemy)
-
-    if hit then
-        Audio.play(sounds.hit)
-
-        if enemy.dead and not victoryTriggered then
-            victoryTriggered = true
-
-            Audio.play(sounds.death)
-            Audio.play(sounds.victory)
-
-            victory.show = true
-        end
-    end
-end
-
-function love.update(dt)
-    enemy:update(dt)
-    victory:update(dt)
-
-    player:update(dt, room)
-    Audio.update()
-
-    camera:update(
-        player.x,
-        player.y,
-        function(x, y) return Iso.project(x, y, TILE_W, TILE_H) end,
-        TILE_H,
-        dt
-    )
-end
-
+-- =========================
+-- DRAW
+-- =========================
 function love.draw()
     drawRoom()
 
-    -- depth sorting
     local drawables = { player, enemy }
     table.sort(drawables, function(a, b)
         return a.y < b.y
