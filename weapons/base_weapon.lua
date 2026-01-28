@@ -13,7 +13,7 @@ function Weapon:new(owner)
     return w
 end
 
-function Weapon:update(dt)
+function Weapon:update(dt, sounds, Audio)
     if self.cooldown > 0 then
         self.cooldown = self.cooldown - dt
     end
@@ -23,6 +23,11 @@ function Weapon:update(dt)
         if self.anim.timer <= 0 then
             self.anim.type = nil
         end
+    end
+
+    -- Process pending damage if the weapon has it
+    if self.processPendingDamage then
+        self:processPendingDamage(dt, sounds, Audio)
     end
 end
 

@@ -66,19 +66,23 @@ end
 -- UPDATE
 -- =========================
 function love.update(dt)
-    enemy:update(dt)
+    enemy:update(dt, player)
     victory:update(dt)
 
     -- PLAYER (movement + dash + weapon update)
-    player:update(dt, room)
+    player:update(dt, room, sounds, Audio)
 
-    -- WEAPON INPUT
+    -- WEAPON INPUT (sounds delayed to 50% of animation duration)
     if love.mouse.isDown(1) then
-        player:usePrimary({ enemy })
+        if player:usePrimary({ enemy }) then
+            Audio.playDelayed(sounds.attack_swipe, 1.0)  -- 50% of 2.0s animation
+        end
     end
 
     if love.mouse.isDown(2) then
-        player:useSecondary({ enemy })
+        if player:useSecondary({ enemy }) then
+            Audio.playDelayed(sounds.attack_jump, 1.2)  -- 50% of 2.4s animation
+        end
     end
 
     -- CAMERA FOLLOW
@@ -93,7 +97,7 @@ function love.update(dt)
     player:updateAim(camera, TILE_W, TILE_H)
 
 
-    Audio.update()
+    Audio.update(dt)
 end
 
 -- =========================
@@ -101,11 +105,12 @@ end
 -- =========================
 function love.keypressed(key)
     if key == "space" and not player.isDashing then
+        -- Isometric screen-space directions for dash
         local dx, dy = 0, 0
-        if love.keyboard.isDown("w") then dy = -1 end
-        if love.keyboard.isDown("s") then dy = 1 end
-        if love.keyboard.isDown("a") then dx = -1 end
-        if love.keyboard.isDown("d") then dx = 1 end
+        if love.keyboard.isDown("w") then dx = dx - 1; dy = dy - 1 end  -- top corner
+        if love.keyboard.isDown("s") then dx = dx + 1; dy = dy + 1 end  -- bottom corner
+        if love.keyboard.isDown("a") then dx = dx - 1; dy = dy + 1 end  -- left corner
+        if love.keyboard.isDown("d") then dx = dx + 1; dy = dy - 1 end  -- right corner
 
         local len = math.sqrt(dx * dx + dy * dy)
         if len == 0 then return end
