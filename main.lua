@@ -1,17 +1,42 @@
-local Iso              = require("core.iso")
-local Camera           = require("core.camera")
-local Audio            = require("core.audio")
-local Room             = require("world.room")
-local Player           = require("entities.player")
-local Enemy            = require("entities.enemy")
-local VictoryText      = require("ui.victory_text")
+--[[
+    Gods - Main Entry Point
+    Uses Hades 2-style Data-Logic-Presentation architecture.
+]]
 
-local TILE_W, TILE_H   = 150, 96
+-- Core Systems
+local Iso = require("core.iso")
+local Camera = require("core.camera")
+local Events = require("core.events")
+local State = require("core.state")
 
-local GRID_FILL        = { 84 / 255, 225 / 255, 227 / 255 }
-local GRID_LINE        = { 84 / 255, 225 / 255, 227 / 255 }
+-- Logic Layer
+local PlayerLogic = require("logic.PlayerLogic")
+local EnemyLogic = require("logic.EnemyLogic")
+local WeaponLogic = require("logic.WeaponLogic")
 
-local victoryTriggered = false
+-- Presentation Layer
+local PlayerPresentation = require("presentation.PlayerPresentation")
+local EnemyPresentation = require("presentation.EnemyPresentation")
+local AudioPresentation = require("presentation.AudioPresentation")
+
+-- World
+local Room = require("world.room")
+
+-- UI
+local VictoryText = require("ui.victory_text")
+
+-- Native (optional C++ extension)
+local Native = require("native.bindings.ffi_bindings")
+
+-- Constants
+local TILE_W, TILE_H = 150, 96
+local GRID_FILL = { 84 / 255, 225 / 255, 227 / 255 }
+local GRID_LINE = { 84 / 255, 225 / 255, 227 / 255 }
+
+-- Game objects
+local room, camera, victory
+local player, playerPres
+local enemy, enemyPres
 
 -- =========================
 -- ROOM DRAW
@@ -50,15 +75,37 @@ end
 -- LOAD
 -- =========================
 function love.load()
-    sounds = Audio.load()
-
+    -- Initialize state
+    State.initAll()
+    
+    -- Initialize audio (registers event handlers)
+    AudioPresentation.init()
+    
+    -- Initialize native engine if available
+    if Native.available then
+        Native.init()
+        print("Native engine: " .. Native.getVersion())
+    end
+    
+    -- Create room
     room = Room.new(25, 25)
     room:generate()
-
-    player  = Player.new(room:getRandomTile())
-    enemy   = Enemy.new(room:getRandomTile())
-
-    camera  = Camera.new(960, 200)
+    
+    -- Create player (Logic + Presentation)
+    local px, py = room:getRandomTile()
+    player = PlayerLogic.new(px, py)
+    playerPres = PlayerPresentation.new()
+    
+    -- Create weapon for player
+    player.weapon = WeaponLogic.new("Mace", player)
+    
+    -- Create enemy (Logic + Presentation)
+    local ex, ey = room:getRandomTile()
+    enemy = EnemyLogic.new("Swarmer", ex, ey)
+    enemyPres = EnemyPresentation.new()
+    
+    -- Camera and UI
+    camera = Camera.new(960, 200)
     victory = VictoryText.new()
 end
 
@@ -66,26 +113,39 @@ end
 -- UPDATE
 -- =========================
 function love.update(dt)
-    enemy:update(dt, player)
+    -- Update enemy logic
+    EnemyLogic.update(enemy, dt, player)
+    EnemyPresentation.update(enemyPres, enemy, dt)
+    
+    -- Update victory UI
     victory:update(dt)
-
-    -- PLAYER (movement + dash + weapon update)
-    player:update(dt, room, sounds, Audio)
-
-    -- WEAPON INPUT (sounds delayed to 50% of animation duration)
+    
+    -- Update weapon
+    WeaponLogic.update(player.weapon, dt)
+    
+    -- Determine player animation state from weapon
+    if WeaponLogic.getAnimationType(player.weapon) then
+        player.animState = WeaponLogic.getAnimationType(player.weapon)
+    end
+    
+    -- Update player logic (movement, dash)
+    if not WeaponLogic.getAnimationType(player.weapon) then
+        PlayerLogic.update(player, dt, room)
+    end
+    
+    -- Update player presentation
+    PlayerPresentation.update(playerPres, player, dt)
+    
+    -- Weapon input
     if love.mouse.isDown(1) then
-        if player:usePrimary({ enemy }) then
-            Audio.playDelayed(sounds.attack_swipe, 1.0)  -- 50% of 2.0s animation
-        end
+        WeaponLogic.primary(player.weapon, { enemy })
     end
-
+    
     if love.mouse.isDown(2) then
-        if player:useSecondary({ enemy }) then
-            Audio.playDelayed(sounds.attack_jump, 1.2)  -- 50% of 2.4s animation
-        end
+        WeaponLogic.secondary(player.weapon, { enemy })
     end
-
-    -- CAMERA FOLLOW
+    
+    -- Camera follow
     camera:update(
         player.x,
         player.y,
@@ -93,11 +153,16 @@ function love.update(dt)
         TILE_H,
         dt
     )
-
-    player:updateAim(camera, TILE_W, TILE_H)
-
-
-    Audio.update(dt)
+    
+    -- Update aim from mouse
+    local mx, my = love.mouse.getPosition()
+    local cx = mx - camera.x
+    local cy = my - camera.y
+    local wx, wy = Iso.screenToWorld(cx, cy, TILE_W, TILE_H)
+    PlayerLogic.updateAim(player, wx, wy)
+    
+    -- Update audio
+    AudioPresentation.update(dt)
 end
 
 -- =========================
@@ -105,20 +170,17 @@ end
 -- =========================
 function love.keypressed(key)
     if key == "space" and not player.isDashing then
-        -- Isometric screen-space directions for dash
         local dx, dy = 0, 0
-        if love.keyboard.isDown("w") then dx = dx - 1; dy = dy - 1 end  -- top corner
-        if love.keyboard.isDown("s") then dx = dx + 1; dy = dy + 1 end  -- bottom corner
-        if love.keyboard.isDown("a") then dx = dx - 1; dy = dy + 1 end  -- left corner
-        if love.keyboard.isDown("d") then dx = dx + 1; dy = dy - 1 end  -- right corner
+        if love.keyboard.isDown("w") then dx = dx - 1; dy = dy - 1 end
+        if love.keyboard.isDown("s") then dx = dx + 1; dy = dy + 1 end
+        if love.keyboard.isDown("a") then dx = dx - 1; dy = dy + 1 end
+        if love.keyboard.isDown("d") then dx = dx + 1; dy = dy - 1 end
 
         local len = math.sqrt(dx * dx + dy * dy)
         if len == 0 then return end
 
         dx, dy = dx / len, dy / len
-        player:startDash(dx, dy)
-
-        Audio.play(sounds.dash)
+        PlayerLogic.startDash(player, dx, dy)
     end
 end
 
@@ -128,15 +190,25 @@ end
 function love.draw()
     drawRoom()
 
-    local drawables = { player, enemy }
+    -- Sort drawables by Y for proper depth
+    local drawables = {
+        { logic = player, pres = playerPres, isPlayer = true },
+        { logic = enemy, pres = enemyPres, isPlayer = false },
+    }
     table.sort(drawables, function(a, b)
-        return a.y < b.y
+        return a.logic.y < b.logic.y
     end)
 
-    for _, e in ipairs(drawables) do
-        e:draw(function(x, y)
-            return Iso.project(x, y, TILE_W, TILE_H)
-        end, camera)
+    for _, d in ipairs(drawables) do
+        local sx, sy = Iso.project(d.logic.x, d.logic.y, TILE_W, TILE_H)
+        sx = sx + camera.x
+        sy = sy + camera.y
+        
+        if d.isPlayer then
+            PlayerPresentation.draw(d.pres, d.logic, sx, sy)
+        else
+            EnemyPresentation.draw(d.pres, d.logic, sx, sy)
+        end
     end
 
     victory:draw()
