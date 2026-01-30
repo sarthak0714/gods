@@ -72,8 +72,8 @@ function Mace:primary(enemies)
         if dist <= self.sweepRange then
             local dot = dx * aim.x + dy * aim.y
             if dot > 0.4 then
-                -- Queue damage for end of animation
-                self:queueDamage(enemy, self.sweepDamage, self.anim.duration)
+                -- Queue damage for 70% through animation (last 30% for hit/death anim)
+                self:queueDamage(enemy, self.sweepDamage, self.anim.duration * 0.7)
             end
         end
 
@@ -100,8 +100,8 @@ function Mace:secondary(enemies)
         local dist = math.sqrt(dx * dx + dy * dy)
 
         if dist <= self.slamRadius then
-            -- Queue damage for end of animation
-            self:queueDamage(enemy, self.slamDamage, self.anim.duration)
+            -- Queue damage for 70% through animation (last 30% for hit/death anim)
+            self:queueDamage(enemy, self.slamDamage, self.anim.duration * 0.7)
         end
 
         ::continue::
