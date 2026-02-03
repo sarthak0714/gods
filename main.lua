@@ -28,6 +28,9 @@ local VictoryText = require("ui.victory_text")
 -- Native (optional C++ extension)
 local Native = require("native.bindings.ffi_bindings")
 
+-- 3D Renderer (bgfx-based)
+local NativeRenderer = require("core.NativeRenderer")
+
 -- Constants
 local TILE_W, TILE_H = 150, 96
 local GRID_FILL = { 84 / 255, 225 / 255, 227 / 255 }
@@ -85,6 +88,14 @@ function love.load()
     if Native.available then
         Native.init()
         print("Native engine: " .. Native.getVersion())
+    end
+    
+    -- Initialize 3D Renderer (bgfx)
+    local renderer3DLoaded = NativeRenderer.init()
+    if renderer3DLoaded then
+        print("[3D Renderer] Loaded successfully! Version: " .. NativeRenderer.getVersion())
+    else
+        print("[3D Renderer] Not available or failed to load - using 2D sprites")
     end
     
     -- Create room
